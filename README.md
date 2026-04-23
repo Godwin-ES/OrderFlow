@@ -1,64 +1,117 @@
 # OrderFlow
 
-OrderFlow is a production-oriented .NET 8 backend for resilient order processing under concurrent load.
+OrderFlow is a production-oriented .NET 8 backend service for reliable order processing under concurrent load.
 
-## Highlights
-- Clean Architecture with API, Application, Domain, and Infrastructure layers
-- EF Core 8 + PostgreSQL with optimistic concurrency to prevent overselling
-- Idempotent order placement via unique idempotency key
-- Transactional outbox with hosted background dispatcher
-- MediatR-based command/query/event handling
-- FluentValidation pipeline behavior
-- Structured logging with Serilog and RFC 7807-style error responses
-- Unit and integration tests including concurrency behavior
+## Assessment Goal
+Design and implement a backend that:
+- places orders with multiple products and quantities,
+- prevents overselling under concurrency,
+- triggers event-driven downstream processing,
+- remains maintainable and testable with clean architecture boundaries.
+
+## Technology Stack
+- .NET 8 / ASP.NET Core Web API
+- EF Core 8 + PostgreSQL
+- MediatR for command/query + notification flow
+- FluentValidation for request and command validation
+- Serilog for structured logs
+- Swagger/OpenAPI for interactive API documentation
+- xUnit + Moq + FluentAssertions for automated tests
+- Docker + Docker Compose for portable runtime
 
 ## Architecture
-- API: Controllers, middleware, startup wiring
-- Application: Commands, queries, handlers, validators, pipeline behaviors
-- Domain: Entities, domain rules, events, exceptions, interfaces
-- Infrastructure: DbContext, repositories, background services, DI
+The solution is organized into four layers:
+- API layer (src/OrderFlow.Api): transport, controllers, middleware, startup pipeline
+- Application layer (src/OrderFlow.Application): use-case orchestration, validators, handlers, behaviors
+- Domain layer (src/OrderFlow.Domain): entities, invariants, exceptions, contracts
+- Infrastructure layer (src/OrderFlow.Infrastructure): EF Core persistence, repositories, migrations, background services
 
-## Concurrency Strategy
-Product stock uses an EF Core concurrency token (`Version`), and order placement retries on `DbUpdateConcurrencyException` up to 3 times. This prevents overselling while preserving throughput.
+## Core Reliability Design
 
-## Run Locally
-1. Start PostgreSQL (or use Docker compose):
-   ```bash
-   docker compose up -d postgres
-   ```
-2. Apply migrations:
-   ```bash
-   dotnet tool restore
-   dotnet tool run dotnet-ef database update -p src/OrderFlow.Infrastructure -s src/OrderFlow.Api
-   ```
-3. Run the API:
-   ```bash
-   dotnet run --project src/OrderFlow.Api
-   ```
-4. Open Swagger:
-   - http://localhost:8080/swagger (container)
-   - https://localhost:5001/swagger (local default profile)
+### Concurrency and Oversell Prevention
+- Product stock updates use optimistic concurrency with PostgreSQL xmin token.
+- Order placement retries on DbUpdateConcurrencyException up to 3 attempts.
+- Retry path clears stale tracked entities between attempts to guarantee fresh state reads.
 
-## Run Full Stack With Docker
+### Idempotency
+- Orders use a unique IdempotencyKey index.
+- First successful request with a key returns 201 Created.
+- Replayed request with same key returns 200 OK with the original order response.
+
+### Event-Driven Processing
+- Successful order writes an outbox message in the same transaction.
+- Outbox background service dispatches pending events.
+- Notification handlers simulate payment, inventory confirmation, and customer notification.
+
+## API Endpoints
+- POST /api/orders
+- GET /api/orders/{id}
+- GET /api/orders
+- GET /api/products
+- GET /api/products/{id}
+- POST /api/products
+
+## Local Setup
+
+### Prerequisites
+- .NET 8 SDK
+- Docker and Docker Compose
+
+### Run with Local API + Docker PostgreSQL
+1. Start PostgreSQL:
+```bash
+docker compose up -d postgres
+```
+
+2. Restore tools and packages:
+```bash
+dotnet tool restore
+dotnet restore OrderFlow.sln
+```
+
+3. Apply migrations:
+```bash
+dotnet tool run dotnet-ef database update -p src/OrderFlow.Infrastructure -s src/OrderFlow.Api
+```
+
+4. Run API:
+```bash
+dotnet run --project src/OrderFlow.Api
+```
+
+5. Open Swagger:
+- https://localhost:5001/swagger
+
+### Run Full Stack in Docker
 ```bash
 docker compose up --build
 ```
 
-## Test
+Swagger in container mode:
+- http://localhost:8080/swagger
+
+## Testing
+Run all tests:
 ```bash
-dotnet test
+dotnet test OrderFlow.sln
 ```
 
-## Key Trade-Offs
-- PostgreSQL is chosen for production realism (vs. SQLite portability).
-- Event dispatch uses transactional outbox + background service to favor reliability and decouple request latency.
-- Authentication is intentionally omitted for assessment scope, with middleware-oriented design so auth can be added without touching business handlers.
+## CI Quality Gates
+CI workflow is defined at:
+- .github/workflows/ci.yml
 
-## Idempotency Semantics
-- First successful `POST /api/orders` with a new idempotency key returns `201 Created`.
-- Replayed `POST /api/orders` with the same idempotency key returns `200 OK` and the original order payload.
+It enforces:
+- restore
+- build
+- test
+- migration/model consistency check
+
+## Trade-offs and Decisions
+- PostgreSQL chosen over SQLite for production realism and stronger relational behavior.
+- Outbox-based asynchronous dispatch chosen over purely in-request notifications for resilience and lower request coupling.
+- Authentication/authorization intentionally excluded to match assessment scope, while keeping middleware architecture ready for insertion.
 
 ## Assumptions
-- Open API access for assessment (no auth)
-- Event-driven operations are eventually consistent after order placement
-- Single service boundary (in-process handlers) with outbox durability
+- Open API access is acceptable for this assessment.
+- Event dispatch is eventually consistent after order creation.
+- Single-service deployment boundary is sufficient for assessment scope.

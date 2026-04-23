@@ -81,6 +81,7 @@ public sealed class PlaceOrderCommandHandler(
             catch (DbUpdateConcurrencyException) when (attempt < MaxRetries)
             {
                 attempt++;
+                unitOfWork.ClearTracking();
                 logger.LogWarning("Concurrency conflict while placing order with idempotency key {IdempotencyKey}. Retry {Attempt}/{MaxRetries}.", request.IdempotencyKey, attempt, MaxRetries);
             }
             catch (DbUpdateException)

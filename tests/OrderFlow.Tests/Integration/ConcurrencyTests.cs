@@ -34,12 +34,18 @@ public sealed class ConcurrencyTests : IClassFixture<TestWebApplicationFactory>
         var responses = await Task.WhenAll(tasks);
 
         responses.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.Created || r.StatusCode == HttpStatusCode.Conflict);
-        responses.Count(r => r.StatusCode == HttpStatusCode.Created).Should().BeGreaterThan(0);
+        var createdCount = responses.Count(r => r.StatusCode == HttpStatusCode.Created);
+        createdCount.Should().BeGreaterThan(0);
 
         var updatedProduct = await _client.GetFromJsonAsync<ProductResponse>($"/api/products/{product.Id}");
         updatedProduct.Should().NotBeNull();
         updatedProduct!.StockQuantity.Should().BeGreaterThanOrEqualTo(0);
         updatedProduct.StockQuantity.Should().BeLessThanOrEqualTo(5);
+
+        // Inventory cannot be consumed beyond available stock regardless of request concurrency.
+        var consumedUnits = 5 - updatedProduct.StockQuantity;
+        consumedUnits.Should().BeLessThanOrEqualTo(5);
+        consumedUnits.Should().BeLessThanOrEqualTo(createdCount);
     }
 
     private async Task<ProductResponse> CreateProductAsync(int stock)

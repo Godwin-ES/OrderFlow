@@ -88,5 +88,6 @@ public sealed class PlaceOrderCommandHandlerTests
         result.IsIdempotentReplay.Should().BeFalse();
         result.Order.TotalAmount.Should().Be(10m);
         unitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        unitOfWork.Verify(x => x.ClearTracking(), Times.Once);
     }
 }
