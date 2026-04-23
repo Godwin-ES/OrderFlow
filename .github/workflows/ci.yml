@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-migrations:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore OrderFlow.sln
+
+      - name: Build
+        run: dotnet build OrderFlow.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test OrderFlow.sln --no-build --configuration Release
+
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Check EF model and migrations are in sync
+        run: >-
+          dotnet tool run dotnet-ef migrations has-pending-model-changes
+          -p src/OrderFlow.Infrastructure
+          -s src/OrderFlow.Api

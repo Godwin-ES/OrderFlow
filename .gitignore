@@ -1,0 +1,17 @@
+# Build outputs
+bin/
+obj/
+
+# User/IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS/logs
+.DS_Store
+logs/
+*.log
+
+# Docker/local env
+.env
