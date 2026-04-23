@@ -16,6 +16,14 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("OrderFlowDb")
             ?? throw new InvalidOperationException("Connection string 'OrderFlowDb' was not found.");
 
+        // Parse URI format (e.g., Render's postgres:// URL)
+        if (connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
+        {
+            var uri = new Uri(connectionString);
+            var userInfo = uri.UserInfo.Split(':');
+            connectionString = $"Host={uri.Host};Port={(uri.Port > 0 ? uri.Port : 5432)};Database={uri.LocalPath.TrimStart('/')};Username={userInfo[0]};Password={(userInfo.Length > 1 ? userInfo[1] : "")};";
+        }
+
         services.AddDbContext<OrderFlowDbContext>(options =>
         {
             options.UseNpgsql(connectionString);
