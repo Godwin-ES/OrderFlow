@@ -21,8 +21,7 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.Property(x => x.StockQuantity).IsRequired();
 
-        // PostgreSQL-native optimistic concurrency token backed by xmin system column.
-        builder.UseXminAsConcurrencyToken();
+        builder.Property<uint>("Version").IsRowVersion();
 
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.UpdatedAt).IsRequired();
